@@ -35,7 +35,7 @@ type
     data*: array[0..M*N-1, T]
 
 type 
-  SquareMatrix[N: static[int]; T] = TMatrix[N,N,T,ColMajor]
+  SquareMatrix[N: static[int], T] = TMatrix[N,N,T,ColMajor]
 
 type
   TVec*[N: static[int]; T] = TMatrix[N, 1, T, ColMajor]
@@ -80,19 +80,19 @@ type TRay* = object
   origin*: TVec3f
 
 proc `[]=`*(self: var TMatrix; i,j: int; val: TMatrix.T) =
-  when TMatrix.O is RowMajor:
-    var idx = (TMatrix.M * (i-1)) + (j-1)
+  when self.O is RowMajor:
+    var idx = (self.M * (i-1)) + (j-1)
     self.data[idx] = val
-  when TMatrix.O is ColMajor:
-    var idx = (TMatrix.N * (j-1)) + (i-1)
+  when self.O is ColMajor:
+    var idx = (self.N * (j-1)) + (i-1)
     self.data[idx] = val
 
 proc `[]`*(self: TMatrix; i,j: int): TMatrix.T =
-  when TMatrix.O is RowMajor:
-    var idx = (TMatrix.M * (i-1)) + (j-1)
+  when self.O is RowMajor:
+    var idx = (self.M * (i-1)) + (j-1)
     result = self.data[idx]
-  when TMatrix.O is ColMajor:
-    var idx = (TMatrix.N * (j-1)) + (i-1)
+  when self.O is ColMajor:
+    var idx = (self.N * (j-1)) + (i-1)
     result = self.data[idx]
 
 proc `[]`*(self: TVec; i: int): TVec.T =
@@ -125,44 +125,44 @@ proc vec4*[T](v: TVec3[T], w: T): TVec4[T] =
   result.data = [v[1], v[2], v[3], w]
 
 
-proc rows*(mtx: TMatrix): int = TMatrix.N
-proc cols*(mtx: TMatrix): int = TMatrix.M
+proc rows*(mtx: TMatrix): int = mtx.N
+proc cols*(mtx: TMatrix): int = mtx.M
 
 proc identity*[T](): T =
   for i in 1..rows(result):
-    result[i,i] = 1.float32
+    result[i,i] = 1.T
 
 proc dot*(a, b: TVec): TVec.T =
   #FIXME: perhaps this should return a float
-  #assert(a.data.len == b.data.len)
-  for i in 1..TVec.N:
+  assert(a.data.len == b.data.len)
+  for i in 1..a.N:
     result += a[i] * b[i]
 
 proc length*(a: TVec): float =
   result = sqrt(dot(a,a).float)
 
 proc row*(a: TMatrix; i: int): auto =
-  result = TVec[TMatrix.M, TMatrix.T]()
-  for idx in 1..TMatrix.M:
+  result = TVec[a.M, a.T]()
+  for idx in 1..a.M:
     result[idx] = a[i,idx]
 
 proc col*(a: TMatrix; j: int): auto =
-  result = TVec[TMatrix.N, TMatrix.T]()
-  for idx in 1..TMatrix.N:
+  result = TVec[a.N, a.T]()
+  for idx in 1..a.N:
     result[idx] = a[idx, j]
 
 proc `/`*(a: TMatrix, c: float): TMatrix =
-  for i in 1..TMatrix.N:
-    for j in 1..TMatrix.M:
+  for i in 1..a.N:
+    for j in 1..a.M:
       result[i,j] = a[i,j] / c
 
 proc sub*(self: TMatrix; r,c: int): auto =
   ## returns a submatrix of `self`, that is
   ## we delete the ith row and jth column
   ## and return the resulting matrix
-  result = TMatrix[TMatrix.N - 1, TMatrix.M - 1, TMatrix.T, TMatrix.O]()
-  for i in 1..TMatrix.N-1:
-    for j in 1..TMatrix.M-1:
+  result = TMatrix[self.N - 1, self.M - 1, self.T, self.O]()
+  for i in 1..self.N-1:
+    for j in 1..self.M-1:
       #we just handle the four cases here
       #we could be in any one of the four quadrents
       #defined by the row and col we are removing
@@ -172,15 +172,15 @@ proc sub*(self: TMatrix; r,c: int): auto =
       else: result[i,j] = self[i,j]
 
 proc transpose*(a: TMatrix): TMatrix =
-  for i in 1..TMatrix.N:
-    for j in 1..TMatrix.M:
+  for i in 1..a.N:
+    for j in 1..a.M:
       result[i,j] = a[j,i]
 
 proc det*(a: SquareMatrix): float =
-  when SquareMatrix.N == 2:
+  when a.N == 2:
     result = (a[1,1] * a[2,2]) - (a[1,2] * a[2,1])
   else:
-    for i in 1..SquareMatrix.N:
+    for i in 1..a.N:
       var sgn = pow((-1).float,(i + 1).float)
       result += sgn * a[i,1] * det(a.sub(i,1))
 
@@ -202,7 +202,7 @@ proc inverse*(a: TMat4f): TMat4f =
   result = adj(a)/det(a)
 
 proc trace*(a: SquareMatrix): float =
-  for i in 1..SquareMatrix.N:
+  for i in 1..a.N:
     result += a[i,i]
 
 proc initMat3f*(arrs: array[0..8, float32]): TMat3f = 
@@ -278,35 +278,35 @@ proc normalize*(a: TVec): TVec =
   result = a / norm(a)
 
 proc `+`*(a, b: TVec): TVec =
-  for i in 1..TVec.N:
+  for i in 1..a.N:
     result[i] = a[i] + b[i]
 
 proc `+=`*(a: var TVec, b: TVec) =
   a = a+b
 
 proc `-`*(a, b: TVec): TVec =
-  for i in 1..TVec.N:
+  for i in 1..a.N:
     result[i] = a[i] - b[i]
 
 proc `-`*(a: TVec, c: float): TVec =
-  for i in 1..TVec.N:
+  for i in 1..a.N:
     result[i] = a[i] - c
 
 proc `*`*(a: TVec, b: float): TVec =
-  for i in 1..TVec.N:
+  for i in 1..a.N:
     result[i] = a[i] * b
 
 proc `*`*(b: float, a: TVec): TVec = a * b
 
 proc `<`*(a: TVec, b: TVec): bool =
   result = true
-  for i in 1..TVec.N:
+  for i in 1..a.N:
     if a[i] >= b[i]:
       return false
 
 proc `<=`*(a: TVec, b: TVec): bool =
   result = true
-  for i in 1..TVec.N:
+  for i in 1..a.N:
     if a[i] > b[i]:
       return false
 
@@ -344,11 +344,10 @@ proc extrema*(vecs: varargs[TVec3f]): tuple[min,max: TVec3f] =
     if vec.z > result.max.z: result.max.z = vec.z
     elif vec.z < result.min.z: result.min.z = vec.z
 
-
 #transform related code
 proc toAffine*(a: TMat3f): TMat4f =
-  for i in 1..TMat3f.N:
-    for j in 1..TMat3f.M:
+  for i in 1..a.N:
+    for j in 1..a.M:
       result[i,j] = a[i,j]
   result[4,4] = 1'f32
 
@@ -921,7 +920,7 @@ proc frustumContains*(frustum: TMat4f, box: TAlignedBox3f): bool =
         inc(numIn)
     if numIn == 0:
       return false
-    
+
       
 discard """
 const XSwiz = {'x', 'r', 'u' }
@@ -964,7 +963,6 @@ proc LookAt*(eye, center, up: TVec3f): TMat4f =
   result = result.transpose()
   var eyeTrans = toTranslationMatrix(-1 * eye)
   result = mul(eyeTrans, result)
-
 
 when isMainModule:
 
