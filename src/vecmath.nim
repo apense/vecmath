@@ -53,6 +53,7 @@ type
   TVec4f* = TMatrix[4, 1, float32, ColMajor]
   TVec3f* = TMatrix[3, 1, float32, ColMajor]
   TVec2f* = TMatrix[2, 1, float32, ColMajor]
+  TMatf*[N, M: static[int]] = TMatrix[N, M, float32, ColMajor]
   TQuatf* = distinct array[1..4, float32] #poor man's quaternion
 
 type
@@ -128,13 +129,12 @@ proc vec4*[T](v: TVec3[T], w: T): TVec4[T] =
 proc rows*(mtx: TMatrix): int = mtx.N
 proc cols*(mtx: TMatrix): int = mtx.M
 
-proc identity*[T](): T =
-  for i in 1..rows(result):
-    result[i,i] = 1.T
+proc len*(a: TVec): int =
+  result = a.data.len
 
 proc dot*(a, b: TVec): TVec.T =
   #FIXME: perhaps this should return a float
-  assert(a.data.len == b.data.len)
+  assert(a.len == b.len)
   for i in 1..a.N:
     result += a[i] * b[i]
 
@@ -163,9 +163,9 @@ proc sub*(self: TMatrix; r,c: int): auto =
   result = TMatrix[self.N - 1, self.M - 1, self.T, self.O]()
   for i in 1..self.N-1:
     for j in 1..self.M-1:
-      #we just handle the four cases here
-      #we could be in any one of the four quadrents
-      #defined by the row and col we are removing
+      # we just handle the four cases here
+      # we could be in any one of the four quadrents
+      # defined by the row and col we are removing
       if i >= r and j >= c: result[i,j] = self[i+1,j+1]
       elif i >= r: result[i,j] = self[i+1, j]
       elif j >= c: result[i,j] = self[i, j+1]
@@ -203,7 +203,7 @@ proc inverse*(a: TMat4f): TMat4f =
 
 proc trace*(a: SquareMatrix): float =
   for i in 1..a.N:
-    result += a[i,i]
+    result += float(a[i,i])
 
 proc initMat3f*(arrs: array[0..8, float32]): TMat3f = 
   result.data = arrs
@@ -218,10 +218,19 @@ proc mat3f*(mat: TMat4f): TMat3f =
     for j in 1..3:
       result[i,j] = mat[i,j]
 
-proc `$`*(a: TMat3f): string =
-  result = formatFloat(a[1,1]) & " " & formatFloat(a[1,2]) & formatFloat(a[1,3]) & "\n" &
-           formatFloat(a[2,1]) & " " & formatFloat(a[2,2]) & formatFloat(a[2,3]) & "\n" &
-           formatFloat(a[3,1]) & " " & formatFloat(a[3,2]) & formatFloat(a[3,3])
+proc `$`*(a: TMatrix): string =
+  ## Hopefully, this'll make [[1,2,3],[4,5,6]]
+  ## print out as
+  ## 
+  ## [ 1 2 3 ]
+  ## [ 4 5 6 ]
+  ##
+  result = "\n"
+  for i in 1..a.N:
+    result &= "[ "
+    for j in 1..a.M:
+      result &= $a[i,j] & " "
+    result &= "]\n"
 
 proc mul*(a: TMat4f; b: TMat4f): TMat4f =
   for i in 1..4:
@@ -260,6 +269,20 @@ proc identity3f*(): TMat3f =
   for i in 1..3:
     result[i,i] = 1'f32
 
+proc identity4*[T](): TMat4[T] =
+  for i in 1..4:
+    result[i,i] = 1.T
+
+proc identity3*[T](): TMat3[T] =
+  for i in 1..3:
+    result[i,i] = 1.T
+
+template identity*(s: int, t: typedesc): expr =
+  var x: SquareMatrix[s,t]
+  for i in 1..s:
+    x[i,i] = t(1)
+  x
+
 #vector only code
 proc x*(a: TVec): TVec.T = a[1]
 proc y*(a: TVec): TVec.T = a[2]
@@ -277,26 +300,100 @@ proc norm*(a: TVec): float =
 proc normalize*(a: TVec): TVec =
   result = a / norm(a)
 
-proc `+`*(a, b: TVec): TVec =
-  for i in 1..a.N:
-    result[i] = a[i] + b[i]
+# Unary plus
+proc `+`*(a: TMatrix): TMatrix =
+  result = a
 
-proc `+=`*(a: var TVec, b: TVec) =
+# Extended for vectors and matrices
+proc `+`*(a, b: TMatrix): TMatrix =
+  assert(a.M == b.M)
+  assert(a.N == b.N)
+  if a.M == 1:
+    for i in 1..a.N:
+      result[i] = a[i] + b[i]
+  else:
+    for i in 1..a.N:
+      for j in 1..a.M:
+        result[i,j] = a[i,j] + b[i,j]
+
+proc `+=`*(a: var TMatrix, b: TMatrix) =
   a = a+b
 
-proc `-`*(a, b: TVec): TVec =
-  for i in 1..a.N:
-    result[i] = a[i] - b[i]
+# Unary minus
+# extended for matrices and vectors
+proc `-`*(a: TMatrix): TMatrix =
+  if a.N == 1:
+    for i in 1..a.N:
+      result[i] = -a[i]
+  else:
+    for i in 1..a.N:
+      for j in 1..a.M:
+        result[i,j] = -a[i,j]
 
-proc `-`*(a: TVec, c: float): TVec =
-  for i in 1..a.N:
-    result[i] = a[i] - c
+# Simplified to not rewrite
+proc `-`*(a, b: TMatrix): TMatrix =
+  result = a + (-b)
+
+proc `-=`*(a: var TMatrix, b: TMatrix) =
+  a = a-b
+
+proc `-`*(a: TMatrix, c: float): TMatrix =
+  if a.M == 1:
+    for i in 1..a.N:
+      result[i] = a[i] - c
+  else:
+    for i in 1..a.N:
+      for j in 1..a.M:
+        result[i,j] = a[i,j] - c
 
 proc `*`*(a: TVec, b: float): TVec =
-  for i in 1..a.N:
-    result[i] = a[i] * b
+  if a.M == 1:
+    for i in 1..a.N:
+      result[i] = a[i] * b
+  else:
+    for i in 1..a.N:
+      for j in 1..a.M:
+        result[i,j] = a[i,j] * b
 
 proc `*`*(b: float, a: TVec): TVec = a * b
+
+proc `*=`*(a: var TVec, b: float) = 
+  a = a * b
+
+# Extended. Matches matrices and vectors (TMatrix subclass)
+proc `==`*(a, b: TMatrix): bool =
+  assert(a.N == b.N)
+  assert(a.M == b.M)
+  result = true
+  if a.M == 1:
+    # vector
+    for i in 1..a.N:
+      if a[i] != b[i]:
+        return false
+  # else a general matrix
+  # is it possible to just use this in general?
+  # i.e., for j in 1..1 should just do it once.
+  # i think it won't just because of the [] operator being different
+  for i in 1..a.N:
+    for j in 1..a.M:
+      if a[i,j] != b[i,j]:
+        return false
+
+# approximately equal to, in case of weird float stuff
+proc `~=`*(a, b: TMatrix, tol: float = 1.0e-5): bool =
+  assert(a.N == b.M)
+  assert(a.M == b.M)
+  result = true
+  # cehck for exceeding of tolerance
+  if a.M == 1:
+    # vector
+    for i in 1..a.N:
+      if abs(a[i] - b[i]) > tol:
+        return false
+  for i in 1..a.N:
+    for j in 1..a.M:
+      if abs(a[i,j] - b[i,j]) > tol:
+        return false
 
 proc `<`*(a: TVec, b: TVec): bool =
   result = true
@@ -968,6 +1065,25 @@ when isMainModule:
 
   import unittest
 
+  test "TIdentity":
+    var ta = identity4[int]()
+    check(ta[1,1] == 1)
+    var tb = identity4[float32]()
+    check(tb[1,1] == 1'f32)
+
+  test "TGenIdentity":
+    var ta = identity(3, int)
+    check(ta[2,2] == 1)
+    var tb = identity(4, float)
+    echo tb
+    check(tb[3,3] == 1.0)
+
+  test "TMatTranspose":
+    var ta: TMat4f
+    ta[2,3] = 1.0'f32
+    var tb = ta.transpose
+    check(tb[3,2] == 1.0'f32)
+
   test "TLessThan":
     var av = vec3f(0,0,0)
     var bv = vec3f(1,1,1)
@@ -1050,6 +1166,7 @@ when isMainModule:
     var da = det(a)
     check(da == 0.0)
   
+  # XXX: Failing
   test "TAdj3x3":
     var a = initMat3f([1'f32, 2'f32, 3'f32, 
                        4'f32, 5'f32, 6'f32,
