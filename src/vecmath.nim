@@ -62,18 +62,18 @@ type
     max*: TVec3f
 
 type TCornerType* = enum
-  ctBottomLeftFloor = 0,
-  ctBottomRightFloor = 1,
-  ctTopLeftFloor = 2,
-  ctTopRightFloor = 3,
-  ctBottomLeftCeil = 4,
-  ctBottomRightCeil = 5,
-  ctTopLeftCeil = 6,
+  ctBottomLeftFloor = 0
+  ctBottomRightFloor = 1
+  ctTopLeftFloor = 2
+  ctTopRightFloor = 3
+  ctBottomLeftCeil = 4
+  ctBottomRightCeil = 5
+  ctTopLeftCeil = 6
   ctTopRightCeil = 7
 
 type TAxis* = enum
-  axisYZ = 1,
-  axisXZ = 2,
+  axisYZ = 1
+  axisXZ = 2
   axisXY = 3
 
 type TRay* = object
@@ -192,6 +192,24 @@ proc det*(a: TMat3f): float =
     var sgn = pow((-1).float, (i + 1).float)
     result += sgn * a[i,1] * det2(a.sub(i,1))
 """
+
+proc adj2*(a: TMat2f): TMat2f =
+  result[1,1] = a[2,2]
+  result[1,2] = -a[1,2]
+  result[2,1] = -a[2,1]
+  result[2,2] = a[1,1]
+
+proc adj3*(a: TMat3f): TMat3f =
+  result[1,1] = +(a[2,2]*a[3,3]-a[2,3]*a[3,2])
+  result[1,2] = -(a[1,2]*a[3,3]-a[1,3]*a[3,2])
+  result[1,3] = +(a[1,2]*a[2,3]-a[1,3]*a[2,2])
+  result[2,1] = -(a[2,1]*a[3,3]-a[2,3]*a[3,1])
+  result[2,2] = +(a[1,1]*a[3,3]-a[1,3]*a[3,1])
+  result[2,3] = -(a[1,1]*a[2,3]-a[1,3]*a[2,1])
+  result[3,1] = +(a[2,1]*a[3,2]-a[2,2]*a[3,1])
+  result[3,2] = -(a[1,1]*a[3,2]-a[1,2]*a[3,1])
+  result[3,3] = +(a[1,1]*a[2,2]-a[1,2]*a[2,1])
+
 proc adj*(a: TMat4f): TMat4f =
   for i in 1..4:
     for j in 1..4:
@@ -374,10 +392,11 @@ proc `==`*(a, b: TMatrix): bool =
   # is it possible to just use this in general?
   # i.e., for j in 1..1 should just do it once.
   # i think it won't just because of the [] operator being different
-  for i in 1..a.N:
-    for j in 1..a.M:
-      if a[i,j] != b[i,j]:
-        return false
+  else:
+    for i in 1..a.N:
+      for j in 1..a.M:
+        if a[i,j] != b[i,j]:
+          return false
 
 # approximately equal to, in case of weird float stuff
 proc `~=`*(a, b: TMatrix, tol: float = 1.0e-5): bool =
@@ -390,10 +409,11 @@ proc `~=`*(a, b: TMatrix, tol: float = 1.0e-5): bool =
     for i in 1..a.N:
       if abs(a[i] - b[i]) > tol:
         return false
-  for i in 1..a.N:
-    for j in 1..a.M:
-      if abs(a[i,j] - b[i,j]) > tol:
-        return false
+  else:
+    for i in 1..a.N:
+      for j in 1..a.M:
+        if abs(a[i,j] - b[i,j]) > tol:
+          return false
 
 proc `<`*(a: TVec, b: TVec): bool =
   result = true
@@ -518,6 +538,11 @@ proc y*(q: TQuatf): float32 = q[3]
 proc z*(q: TQuatf): float32 = q[4]
 proc mul*(p: TQuatf, q: TQuatf): TQuatf
 
+proc `$`*(q: TQuatf): string =
+  # w + xi + yj + zk
+  result = "\n" & $q.w & " + " & $q.i &
+            "i + " & $q.j & "j + " & $q.k & "k\n"
+
 proc `/`*(q: TQuatf, s: float): TQuatf =
   result.i = q.i / s
   result.j = q.j / s
@@ -564,32 +589,29 @@ proc mul*(p: TQuatf; a: TAlignedBox3f): TAlignedBox3f =
     result.max[i] = max(a.max[i], rotmax[i])
 
 proc toRotMatrix*(q: TQuatf): TMat3f =
-  #this code is ported from Eigen
-  #pretty much directly
-  if not(norm(q) <= 1.1'f32 and norm(q) >= 0.9'f32):
-    echo("bad quat: " & repr(q))
-  assert(norm(q) <= 1.1'f32 and norm(q) >= 0.9'f32)
-  var tx: float32 = float32(2)*q.x()
-  var ty: float32 = float32(2)*q.y()
-  var tz: float32 = float32(2)*q.z()
-  var twx: float32 = tx*q.w()
-  var twy: float32 = ty*q.w()
-  var twz: float32 = tz*q.w()
-  var txx: float32 = tx*q.x()
-  var txy: float32 = ty*q.x()
-  var txz: float32 = tz*q.x()
-  var tyy: float32 = ty*q.y()
-  var tyz: float32 = tz*q.y()
-  var tzz: float32 = tz*q.z()
-  result[1,1] = float32(1)-(tyy+tzz)
-  result[1,2] = txy-twz
-  result[1,3] = txz+twy
-  result[2,1] = txy+twz
-  result[2,2] = float32(1)-(txx+tzz)
-  result[2,3] = tyz-twx
-  result[3,1] = txz-twy
-  result[3,2] = tyz+twx
-  result[3,3] = float32(1)-(txx+tyy)
+  # quaternion to rotation matrix, regardless of whether we
+  # start from a unit quaternion
+  var n = q.w*q.w + q.x*q.x + q.y*q.y + q.z*q.z
+  # poor test for a norm of 0
+  var s = if (n == 0.0): 0.0 else: 2/n
+  var wx = s*q.w*q.x
+  var wy = s*q.w*q.y
+  var wz = s*q.w*q.z
+  var xx = s*q.x*q.x
+  var xy = s*q.x*q.y
+  var xz = s*q.x*q.z
+  var yy = s*q.y*q.y
+  var yz = s*q.y*q.z
+  var zz = s*q.z*q.z
+  result[1,1] = 1'f32 - (yy + zz)
+  result[1,2] = xy - wz
+  result[1,3] = xz + wy
+  result[2,1] = xy + wz
+  result[2,2] = 1'f32 - (xx + zz)
+  result[2,3] = yz - wx
+  result[3,1] = xz - wy
+  result[3,2] = yz + wx
+  result[3,3] = 1'f32 - (xx + yy)
 
 proc fromRotMatrix*(m: TMat3f): TQuatf =
   ## convert a rotation matrix into a quaternion
@@ -1075,7 +1097,6 @@ when isMainModule:
     var ta = identity(3, int)
     check(ta[2,2] == 1)
     var tb = identity(4, float)
-    echo tb
     check(tb[3,3] == 1.0)
 
   test "TMatTranspose":
@@ -1166,12 +1187,12 @@ when isMainModule:
     var da = det(a)
     check(da == 0.0)
   
-  # XXX: Failing
+  # TODO: Make generic adj() proc to handle any case correctly
   test "TAdj3x3":
     var a = initMat3f([1'f32, 2'f32, 3'f32, 
-                       4'f32, 5'f32, 6'f32,
-                       7'f32, 8'f32, 9'f32])
-    var aj = adj(a)
+                               4'f32, 5'f32, 6'f32,
+                               7'f32, 8'f32, 9'f32])
+    var aj = adj3(a)
     var b = initMat3f([-3'f32, 6'f32, -3'f32,
                         6'f32, -12'f32, 6'f32,
                         -3'f32, 6'f32, -3'f32])
@@ -1192,5 +1213,5 @@ when isMainModule:
   #check(prod[1,2] == 5.0'f32)
   #check(prod[2,1] == 20.0'f32)
   #check(prod[2,2] == 13.0'f32)
-
+  
 
