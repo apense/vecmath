@@ -29,6 +29,13 @@ However, assuming you just want an NxN identity matrix of type T, just run
 
 ```nimrod
 var ti = identity(4, int) # gives a 4x4 matrix with diagonals == 1
+#
+# ti =
+# [ 1 0 0 0 ]
+# [ 0 1 0 0 ]
+# [ 0 0 1 0 ]
+# [ 0 0 0 1 ]
+#
 ```
 
 
